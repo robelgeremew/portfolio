@@ -1,78 +1,86 @@
-/**
-* PHP Email Form Validation - v3.6
-* URL: https://bootstrapmade.com/php-email-form/
-* Author: BootstrapMade.com
-*/
 (function () {
   "use strict";
 
   let forms = document.querySelectorAll('.php-email-form');
 
-  forms.forEach( function(e) {
+  forms.forEach(function(e) {
     e.addEventListener('submit', function(event) {
       event.preventDefault();
 
       let thisForm = this;
-
       let action = thisForm.getAttribute('action');
-      let recaptcha = thisForm.getAttribute('data-recaptcha-site-key');
-      
-      if( ! action ) {
+
+      if (!action) {
         displayError(thisForm, 'The form action property is not set!');
         return;
       }
+
+      // Show loading indicator
       thisForm.querySelector('.loading').classList.add('d-block');
       thisForm.querySelector('.error-message').classList.remove('d-block');
       thisForm.querySelector('.sent-message').classList.remove('d-block');
 
-      let formData = new FormData( thisForm );
+      // Create FormData object
+      let formData = new FormData(thisForm);
+      let formDataObj = {}; // Convert FormData to an object
 
-      if ( recaptcha ) {
-        if(typeof grecaptcha !== "undefined" ) {
+      formData.forEach((value, key) => {
+        formDataObj[key] = value;
+      });
+
+      // If using reCAPTCHA
+      let recaptcha = thisForm.getAttribute('data-recaptcha-site-key');
+      if (recaptcha) {
+        if (typeof grecaptcha !== "undefined") {
           grecaptcha.ready(function() {
-            try {
-              grecaptcha.execute(recaptcha, {action: 'php_email_form_submit'})
+            grecaptcha.execute(recaptcha, { action: 'php_email_form_submit' })
               .then(token => {
-                formData.set('recaptcha-response', token);
-                php_email_form_submit(thisForm, action, formData);
-              })
-            } catch(error) {
-              displayError(thisForm, error);
-            }
+                formDataObj['recaptcha-response'] = token;
+                php_email_form_submit(thisForm, action, formDataObj);
+              });
           });
         } else {
-          displayError(thisForm, 'The reCaptcha javascript API url is not loaded!')
+          displayError(thisForm, 'The reCaptcha JavaScript API URL is not loaded!');
         }
       } else {
-        php_email_form_submit(thisForm, action, formData);
+        php_email_form_submit(thisForm, action, formDataObj);
       }
     });
   });
 
-  function php_email_form_submit(thisForm, action, formData) {
+  function php_email_form_submit(thisForm, action, formDataObj) {
+    // Make the AJAX request to the Node.js backend
     fetch(action, {
       method: 'POST',
-      body: formData,
-      headers: {'X-Requested-With': 'XMLHttpRequest'}
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: JSON.stringify(formDataObj)
     })
     .then(response => {
-      if( response.ok ) {
-        return response.text();
-      } else {
-        throw new Error(`${response.status} ${response.statusText} ${response.url}`); 
+      console.log('Response received:', response); // Log response object
+
+      if (!response.ok) {
+        // Handle non-OK responses here
+        throw new Error(`Server responded with ${response.status} ${response.statusText}`);
       }
+      return response.text();
     })
     .then(data => {
+      console.log('Response text:', data); // Log the response text
       thisForm.querySelector('.loading').classList.remove('d-block');
-      if (data.trim() == 'OK') {
+      if (data.trim() === 'OK') {
         thisForm.querySelector('.sent-message').classList.add('d-block');
-        thisForm.reset(); 
+        thisForm.reset();
       } else {
-        throw new Error(data ? data : 'Form submission failed and no error message returned from: ' + action); 
+        throw new Error(data ? data : 'Form submission failed');
       }
     })
     .catch((error) => {
-      displayError(thisForm, error);
+      // Log error details here
+      console.error("Error during form submission:", error);
+      displayError(thisForm, error.message);
     });
   }
 
